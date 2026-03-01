@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 from sglang.srt.dllm.algorithm.base import DllmAlgorithm
 from sglang.srt.dllm.config import DllmConfig
@@ -82,14 +81,13 @@ class JointThreshold(DllmAlgorithm):
                         1, prev_ids.unsqueeze(-1), -self.penalty_lambda, reduce="add"
                     )
 
-                x = torch.argmax(curr_logits, dim=-1)
-                p = torch.squeeze(
-                    torch.gather(
-                        F.softmax(curr_logits, dim=-1),
-                        dim=-1,
-                        index=torch.unsqueeze(x, -1),
-                    ),
-                    -1,
+                sampling_info = forward_batch.sampling_info
+                x, p = self._sample_from_logits_with_confidence(
+                    curr_logits,
+                    temperature=sampling_info.temperatures[i].item(),
+                    top_k=sampling_info.top_ks[i].item(),
+                    top_p=sampling_info.top_ps[i].item(),
+                    min_p=sampling_info.min_ps[i].item(),
                 )
 
                 mask_index = curr_input_ids == self.mask_id
