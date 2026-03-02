@@ -7,6 +7,8 @@ This test verifies that DLLM works on AMD with triton attention backend.
 import unittest
 from types import SimpleNamespace
 
+import requests
+
 from sglang.srt.utils import kill_process_tree
 from sglang.test.ci.ci_register import register_amd_ci
 from sglang.test.few_shot_gsm8k import run_eval as run_eval_few_shot_gsm8k
@@ -84,6 +86,47 @@ class TestLLaDA2MiniAMD(CustomTestCase):
             )
             # Relaxed threshold for AMD
             self.assertGreater(speed, 10)
+
+    def test_greedy_single_and_batch_consistency(self):
+        prompt = "The capital of Germany is"
+        first_text = None
+
+        for _ in range(3):
+            response_single = requests.post(
+                self.base_url + "/generate",
+                json={
+                    "text": prompt,
+                    "sampling_params": {
+                        "temperature": 0,
+                        "max_new_tokens": 32,
+                    },
+                },
+            )
+            self.assertEqual(
+                response_single.status_code, 200, f"Response: {response_single.text}"
+            )
+            text = response_single.json()["text"]
+            if first_text is None:
+                first_text = text
+            self.assertEqual(text, first_text)
+
+        response_batch = requests.post(
+            self.base_url + "/generate",
+            json={
+                "text": [prompt] * 5,
+                "sampling_params": {
+                    "temperature": 0,
+                    "max_new_tokens": 32,
+                },
+            },
+        )
+        self.assertEqual(
+            response_batch.status_code, 200, f"Response: {response_batch.text}"
+        )
+        batch_body = response_batch.json()
+
+        for i in range(5):
+            self.assertEqual(batch_body[i]["text"], first_text)
 
 
 if __name__ == "__main__":
